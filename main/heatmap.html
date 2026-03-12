@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Heatmap de Ações - Orizon Invest</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    :root {
+      --cor-principal: #084d6e;
+      --cor-fundo-escuro: #2d2d2d;
+      --cor-texto-claro: #ffffff;
+      --cor-texto-escuro: #000000;
+      --fonte-padrao: Arial, sans-serif;
+      --cor-fundo-heatmap: #f4f4f4;
+      --cor-texto-heatmap: #333;
+      --cor-destaque-heatmap: #1E90FF;
+      --cor-botao-heatmap: #ccc;
+      --cor-botao-hover-heatmap: #bbb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--fonte-padrao);
+      background-color: var(--cor-texto-claro);
+    }
+
+    h1, h2 {
+      margin: 0;
+      font-weight: bold;
+    }
+    
+    p {
+      margin: 0.25rem 0;
+    }
+    
+    a {
+      color: var(--cor-texto-claro);
+      text-decoration: none;
+    }
+    
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .header {
+      background-color: var(--cor-principal);
+      color: var(--cor-texto-claro);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      height: 70px;
+      overflow: hidden;
+    }
+
+    .responsiva {
+      height: 60px;  
+      display: block;
+      object-fit: contain;
+    }
+    
+    .navbar {
+      background-color: var(--cor-fundo-escuro);
+      padding: 0.75rem 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    
+    .search-input {
+      margin-left: auto;
+      width: 40%;
+      padding: 0.3rem 1rem;
+      border-radius: 9999px;
+      border: none;
+      font-size: 0.875rem;
+      color: var(--cor-texto-escuro);
+    }
+    
+    .footer {
+      background-color: var(--cor-fundo-escuro);
+      color: var(--cor-texto-claro);
+      padding: 2rem;
+      font-size: 0.875rem;
+    }
+    
+    .footer-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    .footer .section-title {
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+
+    .footer-column a {
+      display: block;
+      margin: 0.25rem 0;
+    }
+    
+    .footer-right {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    
+    .social-icons {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    
+    .legal-links {
+      text-align: right;
+    }
+
+    .legal-links a {
+      display: block;
+      margin-bottom: 0.3rem;
+    }
+    
+    .copyright {
+      text-align: center;
+      font-size: 0.75rem;
+      border-top: 1px solid #555;
+      padding-top: 1rem;
+    }
+
+    html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+    }
+    
+    .heatmap-wrapper {
+        height: 100vh;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        background: var(--cor-fundo-heatmap);
+        font-family: Arial, sans-serif;
+        color: var(--cor-texto-heatmap);
+    }
+
+    #top-bar { 
+      display: flex; 
+      justify-content: center; 
+      align-items: center; 
+      gap: 15px; 
+      padding: 10px; 
+      flex-wrap: wrap; 
+      background-color: var(--cor-fundo-heatmap); 
+    }
+    #controls button, #html-back-button { 
+      margin: 5px; 
+      padding: 8px 16px; 
+      font-size: 14px; 
+      border: none; 
+      background-color: var(--cor-botao-heatmap); 
+      color: var(--cor-texto-escuro); 
+      cursor: pointer; 
+      border-radius: 4px; 
+      transition: background 0.3s; 
+    }
+    #controls button:hover, #html-back-button:hover { 
+      background-color: var(--cor-botao-hover-heatmap); 
+    }
+    #legend { display: flex; flex-direction: column; align-items: center; }
+    #container {
+        width: 95vw;
+        flex: 1;
+        min-height: 0;
+        margin: 10px auto; 
+        display: flex; 
+        justify-content: center; 
+        align-items: center; 
+        position: relative; 
+    }
+    #heatmap-svg-container {
+        width: 100%; 
+        height: 100%; 
+    }
+    
+    .node-parent, .stock-cell-group { cursor: pointer; }
+    .sector-title-hover-bg-fill, .stock-cell-group > rect {
+        transition: filter 0.2s ease, stroke 0.2s ease, fill 0.2s ease, stroke-width 0.2s ease;
+    }
+    .label-group { 
+        pointer-events: none; 
+        fill: white; 
+        text-anchor: middle; 
+        font-weight: bold; 
+    }
+    
+    g.stock-cell-group:hover > rect { 
+        filter: none !important;
+        stroke: var(--cor-destaque-heatmap) !important; 
+        stroke-width: 2.5px !important; 
+    }
+    g.stock-cell-group.highlight-active > rect { 
+        filter: none;
+        stroke: var(--cor-destaque-heatmap); 
+        stroke-width: 2.5px; 
+    }
+
+    #statusMessage { 
+      text-align: center; 
+      font-size: 1.2em; 
+      padding: 20px; 
+      position: absolute; 
+      top: 50%; 
+      left: 50%; 
+      transform: translate(-50%, -50%); 
+      background-color: rgba(230,230,230,0.95); 
+      color: var(--cor-texto-heatmap); 
+      border-radius: 8px; 
+      z-index: 10; 
+      max-width: 80%; 
+      border: 1px solid var(--cor-botao-heatmap); 
+    }
+    
+    .sector-title {
+        fill: var(--cor-texto-heatmap); 
+        font-weight: bold;
+        font-size: 13px;
+        text-anchor: start;
+        pointer-events: none;
+        dominant-baseline: middle;
+        transition: fill 0.2s ease;
+    }
+
+    #loading-spinner {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      border: 8px solid #ddd;
+      border-top-color: var(--cor-destaque-heatmap);
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      animation: spin 1s linear infinite;
+      z-index: 20;
+    }
+    
+    #tooltip {
+      position: absolute;
+      background-color: rgba(40, 40, 40, 0.9);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      pointer-events: none; 
+      font-size: 14px;
+      line-height: 1.4;
+      z-index: 1000;
+      max-width: 250px;
+      transition: opacity 0.2s;
+      opacity: 0; 
+    }
+
+    @keyframes spin {
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <img class="responsiva" src="logo.png" alt="Logo tipo">
+  </header>
+
+  <nav class="navbar">
+    <a href="#">Produtos e Serviços</a>
+    <a href="#">Notícias</a>
+    <a href="#">Opinião</a>
+    <a href="#">Mercados</a>
+    <a href="#">Economia</a>
+    <a href="Heatmap.html">Heatmap</a>
+    <a href="sobre nós.html">Sobre nós</a>
+    <input type="text" placeholder="🔍 Pesquisa..." class="search-input">
+  </nav>
+
+  <main class="heatmap-wrapper">
+    <div id="top-bar">
+      <div id="back-button-placeholder" style="display: none;">
+        <button id="html-back-button">⬅ Voltar</button>
+      </div>
+      <div id="controls">
+        <button onclick="highlightTop('gainers')">Top Ganhadores</button>
+        <button onclick="highlightTop('losers')">Top Perdedores</button>
+        <button onclick="highlightTop('active')">Mais Ativos</button>
+        <button onclick="highlightTop('clear')">Limpar Destaques</button>
+      </div>
+      <div id="legend">
+        <svg width="300" height="50" id="legendSvg"></svg>
+      </div>
+    </div>
+
+    <div id="container">
+      <div id="loading-spinner" style="display: none;"></div>
+      <div id="heatmap-svg-container">
+        <svg id="heatmap"></svg>
+      </div>
+      <div id="statusMessage" style="display: none;"></div>
+    </div>
+
+    <div id="tooltip" style="opacity: 0;"></div>
+  </main>
+  
+  <footer class="footer">
+    <div class="footer-grid">
+      <h2>Orizon Invest</h2>
+      
+      <div class="footer-column">
+        <p class="section-title">Notícias</p>
+        <a href="#">Brasil</a>
+        <a href="#">Mundo</a>
+        <a href="#">Tecnologias</a>
+      </div>
+      
+      <div class="footer-column">
+        <p class="section-title">Mercados</p>
+        <a href="#">Ações</a>
+        <a href="#">Criptomoedas</a>
+        <a href="#">Câmbio</a>
+      </div>
+      
+      <div class="footer-column">
+        <p class="section-title">Economia</p>
+        <a href="#">NewsLetter</a>
+        <a href="#">Gráficos</a>
+        <a href="#">Rates and Bonds</a>
+      </div>
+      
+      <div class="footer-right">
+        <div class="social-icons">
+          <a href="#"><img src="https://img.icons8.com/ios-filled/24/ffffff/twitterx--v2.png" alt="X (Twitter)" /></a>
+          <a href="#"><img src="https://img.icons8.com/ios-filled/24/ffffff/facebook-new.png" alt="Facebook" /></a>
+          <a href="#"><img src="https://img.icons8.com/ios-filled/24/ffffff/instagram-new.png" alt="Instagram" /></a>
+          <a href="#"><img src="https://img.icons8.com/ios-filled/24/ffffff/linkedin.png" alt="LinkedIn" /></a>
+        </div>
+        <div class="legal-links">
+          <a href="#">Gerenciamento de Cookies</a>
+          <a href="#">Termos de Serviço</a>
+          <a href="#">Políticas de Privacidades</a>
+        </div>
+      </div>
+    </div>
+    
+    <div class="copyright">©2025 Orizon Invest All Rights Reserved.</div>
+  </footer>
+
+<script>
+const FINNHUB_API_KEYS = [
+    "d0s65tpr01qkkplt7e0gd0s65tpr01qkkplt7e10", 
+    "d0sf8h9r01qkkpluu3l0d0sf8h9r01qkkpluu3lg",
+    "d0sup01r01qid5qbjoogd0sup01r01qid5qbjop0" 
+];
+const apiKeyCallTimestamps = {};
+FINNHUB_API_KEYS.forEach(key => { apiKeyCallTimestamps[key] = []; });
+
+const TITLE_PADDING_TOP = 22;
+const treemapPaddingOuterValue = 2;
+const MIN_SECTOR_WIDTH_FOR_TITLE = 50;
+const TITLE_TEXT_HORIZONTAL_PADDING = 4;
+
+const stockSymbols = [
+    "AAPL", "MSFT", "GOOGL", "NVDA", "META", "AVGO", "ORCL", "CRM",
+    "AMD", "QCOM", "INTC", "IBM", "ADBE", "JPM", "BAC", "WFC", "MS", "GS",
+    "BLK", "AXP", "C", "V", "MA", "JNJ", "UNH", "LLY", "MRK",
+    "PFE", "ABBV", "TMO", "DHR", "AZN", "AMZN", "TSLA", "HD", "MCD", "NKE",
+    "SBUX", "LOW", "BKNG", "TJX", "CMG", "CAT", "BA", "HON", "XOM", "CVX"
+];
+
+let initialRawData = null;
+let currentHierarchyRoot = null; 
+let initialFullHierarchyRoot = null; 
+let leafData = [];
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+let fxRates = {}; 
+let htmlBackButtonElement; 
+
+function formatMarketCap(value) {
+    if (value >= 1e6) { 
+        return `$${(value / 1e6).toFixed(2)}T`;
+    }
+    if (value >= 1e3) { 
+        return `$${(value / 1e3).toFixed(2)}B`;
+    }
+    return `$${value.toFixed(2)}M`; 
+}
+
+function handleMouseOver(event, d) {
+    const tooltip = d3.select("#tooltip");
+    tooltip.style("opacity", 1);
+    
+    tooltip.html(`
+        <strong>${d.data.fullName} (${d.data.name})</strong><br>
+        Variação: <span style="color: ${d.data.change > 0 ? '#4CAF50' : '#F44336'};">${d.data.change.toFixed(2)}%</span><br>
+        Market Cap: ${formatMarketCap(d.data.value)}
+    `);
+}
+
+function handleMouseMove(event, d) {
+    const tooltip = d3.select("#tooltip");
+    tooltip.style("left", (event.pageX + 15) + "px")
+           .style("top", (event.pageY + 10) + "px");
+}
+
+function handleMouseOut(event, d) {
+    const tooltip = d3.select("#tooltip");
+    tooltip.style("opacity", 0);
+}
+
+function showStatusMessage(message, showSvg = false) {
+    const statusDiv = document.getElementById('statusMessage');
+    const svgContainer = document.getElementById('heatmap-svg-container'); 
+    if (statusDiv) {
+        statusDiv.textContent = message;
+        statusDiv.style.display = 'block';
+    }
+    if (svgContainer) {
+        svgContainer.style.display = showSvg ? 'block' : 'none';
+    }
+}
+
+function hideStatusMessageShowHeatmap() {
+    const statusDiv = document.getElementById('statusMessage');
+    const svgContainer = document.getElementById('heatmap-svg-container');
+    if (statusDiv) statusDiv.style.display = 'none';
+    if (svgContainer) { 
+        svgContainer.style.display = 'block';
+    }
+}
+
+async function makeApiCallWithRateLimit(urlWithoutToken, itemIdentifier, callType, progressText, apiKeyToUse) {
+    const fullUrl = `${urlWithoutToken}&token=${apiKeyToUse}`;
+    const callTimestamps = apiKeyCallTimestamps[apiKeyToUse];
+    const CallsPerMinuteLimit = 55; 
+    const MinimumDelayBetweenCallsMs = 1500; 
+    const API_TIMEOUT_MS = 15000; 
+
+    let now = Date.now();
+    while (callTimestamps.length > 0 && now - callTimestamps[0] > 60000) callTimestamps.shift();
+    if (callTimestamps.length >= CallsPerMinuteLimit) {
+        const oldestCallTime = callTimestamps[0];
+        const timeToWait = Math.max(0, (60000 - (now - oldestCallTime))) + 200; 
+        console.log(`(Chave: ...${apiKeyToUse.slice(-4)}) Rate limit: ${callTimestamps.length} calls/min. Aguardando ${timeToWait / 1000}s...`);
+        if (document.getElementById('loading-spinner').style.display === 'none') {
+            showStatusMessage(`(Chave ...${apiKeyToUse.slice(-4)}) Limite API (${callType} ${itemIdentifier})... Aguardando ${Math.ceil(timeToWait / 1000)}s ${progressText}`, true);
+        }
+        await delay(timeToWait);
+        now = Date.now(); 
+        while (callTimestamps.length > 0 && now - callTimestamps[0] > 60000) callTimestamps.shift();
+    }
+    if (callTimestamps.length > 0) {
+        const timeSinceLastActualCall = now - callTimestamps[callTimestamps.length - 1];
+        if (timeSinceLastActualCall < MinimumDelayBetweenCallsMs) {
+            await delay(MinimumDelayBetweenCallsMs - timeSinceLastActualCall);
+        }
+    }
+    
+    const logMessage = `(Chave ...${apiKeyToUse.slice(-4)}) Buscando ${itemIdentifier !== "FX_RATES" ? `${callType}: ${itemIdentifier} ${progressText}` : `${callType}...`}`;
+    console.log(logMessage);
+    if (document.getElementById('loading-spinner').style.display === 'none' && itemIdentifier !== "FX_RATES") {
+         showStatusMessage(logMessage, true);
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        console.warn(`API call to ${itemIdentifier} aborted due to timeout (${API_TIMEOUT_MS}ms)`);
+        controller.abort();
+    }, API_TIMEOUT_MS);
+
+    let response;
+    try {
+        response = await fetch(fullUrl, { signal: controller.signal });
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+            console.error(`Timeout da API para ${callType} ${itemIdentifier} com chave ...${apiKeyToUse.slice(-4)}`);
+            throw new Error(`Timeout da API para ${callType} ${itemIdentifier} com chave ...${apiKeyToUse.slice(-4)}: ${error.message}`);
+        }
+        console.error(`Erro de Fetch (não timeout) para ${callType} ${itemIdentifier}:`, error);
+        throw new Error(`Falha de rede ao buscar ${callType} para ${itemIdentifier}: ${error.message}`);
+    }
+    clearTimeout(timeoutId); 
+    
+    callTimestamps.push(Date.now()); 
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => "Não foi possível ler o corpo do erro.");
+        console.error(`Falha na API ${response.status} para ${callType} ${itemIdentifier}. Resposta: ${errorText}`);
+        if (response.status === 429) throw { status: 429, message: `Rate limit (429) para ${callType} ${itemIdentifier} com chave ...${apiKeyToUse.slice(-4)}. Detalhe: ${errorText}` };
+        throw new Error(`Falha ao buscar ${callType} para ${itemIdentifier} com chave ...${apiKeyToUse.slice(-4)}: ${response.status} ${response.statusText}. Detalhe: ${errorText}`);
+    }
+    return response.json();
+}
+
+async function fetchAndStoreFxRates(apiKeyForFxCall) {
+    console.log("Tentando buscar taxas de câmbio...");
+    try {
+        const fxUrlBase = `https://finnhub.io/api/v1/forex/rates?base=USD`;
+        const fxData = await makeApiCallWithRateLimit(fxUrlBase, "FX_RATES", "taxas de câmbio", "(inicial)", apiKeyForFxCall);
+        if (fxData && fxData.quote) {
+            fxRates = fxData.quote;
+            console.log("Taxas de câmbio USD buscadas com sucesso:", fxRates);
+            return true;
+        }
+        console.warn("Não foi possível buscar taxas de câmbio da Finnhub (resposta malformada ou sem 'quote').", fxData);
+    } catch (error) { 
+        console.error("Erro crítico ao buscar taxas de câmbio (provavelmente 403 ou timeout):", error.message);
+    }
+    fxRates = {}; 
+    return false;
+}
+
+async function fetchStockDataForSymbol(symbol, apiKeyToUse, stockProgressText) {
+    let companyName = symbol, marketCapInUSD = 0.000001, industry = "N/D", percentChange = 0; 
+    const profileUrlBase = `https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}`;
+    const quoteUrlBase = `https://finnhub.io/api/v1/quote?symbol=${symbol}`;
+    try {
+        const profileData = await makeApiCallWithRateLimit(profileUrlBase, symbol, "perfil", stockProgressText, apiKeyToUse);
+        let rawMarketCapMillions = 0, stockCurrency = "USD"; 
+        if (profileData && profileData.name) {
+            companyName = profileData.name;
+            rawMarketCapMillions = profileData.marketCapitalization || 0; 
+            industry = profileData.finnhubIndustry || "N/D";
+            stockCurrency = profileData.currency || "USD"; 
+        } else { console.warn(`(${apiKeyToUse.slice(-4)}) Perfil incompleto para ${symbol}, usando defaults.`); }
+
+        if (stockCurrency === "USD") {
+            marketCapInUSD = rawMarketCapMillions;
+        } else {
+            console.warn(`(${apiKeyToUse.slice(-4)}) Ação ${symbol} listada como ${stockCurrency} no perfil. Como as taxas de câmbio podem não estar disponíveis (erro 403), o valor pode não ser preciso.`);
+            if (Object.keys(fxRates).length > 0 && fxRates[stockCurrency] && fxRates[stockCurrency] > 0) { 
+                marketCapInUSD = rawMarketCapMillions / fxRates[stockCurrency];
+            } else { 
+                marketCapInUSD = 0.000001; 
+                console.warn(`(${apiKeyToUse.slice(-4)}) Taxas de câmbio para ${stockCurrency} (ação ${symbol}) não disponíveis/encontradas. Usando valor mínimo para market cap.`);
+            }
+        }
+        
+        const quoteData = await makeApiCallWithRateLimit(quoteUrlBase, symbol, "cotação", stockProgressText, apiKeyToUse);
+        if (quoteData && typeof quoteData.dp !== 'undefined') {
+            percentChange = quoteData.dp; 
+        } else {
+            console.warn(`(${apiKeyToUse.slice(-4)}) Cotação incompleta para ${symbol}, 'change' será 0.`);
+            percentChange = 0; 
+        }
+
+        return { symbol: symbol, data: { name: symbol, value: Math.max(marketCapInUSD, 0.000001), change: percentChange, fullName: companyName }, industry: industry };
+    } catch (error) {
+        console.error(`(${apiKeyToUse.slice(-4)}) Erro CRÍTICO processando ${symbol}: ${error.message}`);
+        return { symbol: symbol, error: true, industry: "Erro ao Carregar Dados" }; 
+    }
+}
+
+async function fetchStockDataFinnhub() {
+    const heatmapData = { name: "Ações Globais", children: [] };
+    const sectors = {};
+    console.log("Iniciando busca de dados da Finnhub com chaves:", FINNHUB_API_KEYS.map(k=>k.slice(-4)).join(', '));
+    
+    const fxSuccess = await fetchAndStoreFxRates(FINNHUB_API_KEYS[0]); 
+    if (!fxSuccess) {
+        console.warn("Não foi possível buscar taxas de câmbio. Ações não-USD usarão valor mínimo se o erro 403 persistir.");
+    }
+    console.log("Processando dados das ações...");
+
+    const stockProcessingPromises = [];
+    for (let i = 0; i < stockSymbols.length; i++) {
+        const symbol = stockSymbols[i];
+        const assignedKey = FINNHUB_API_KEYS[i % FINNHUB_API_KEYS.length]; 
+        const stockProgressText = `(${(i + 1)}/${stockSymbols.length})`;
+        stockProcessingPromises.push(fetchStockDataForSymbol(symbol, assignedKey, stockProgressText));
+    }
+
+    const stockResults = await Promise.all(stockProcessingPromises);
+
+    let hasAnyDataError = false;
+    for (const result of stockResults) {
+        if (result && !result.error) { 
+            const industry = result.industry;
+            if (!sectors[industry]) { sectors[industry] = { name: industry, children: [] }; heatmapData.children.push(sectors[industry]); }
+            sectors[industry].children.push(result.data);
+        } else if (result && result.error) { 
+            hasAnyDataError = true;
+            const industry = result.industry; 
+            if (!sectors[industry]) { sectors[industry] = { name: industry, children: [] }; heatmapData.children.push(sectors[industry]); }
+            sectors[industry].children.push({ name: result.symbol, value: 1, change: 0, fullName: "Erro de API" });
+        }
+    }
+    heatmapData.children = heatmapData.children.filter(sector => sector.children && sector.children.length > 0);
+
+    if (heatmapData.children.length === 0 && stockSymbols.length > 0) {
+        console.warn("Nenhum dado de ação foi carregado com sucesso para o heatmap.");
+        return null; 
+    }
+    if (hasAnyDataError) {
+        console.warn("Alguns dados de ações não puderam ser carregados. Verifique o console para detalhes.");
+    }
+    console.log("Busca de dados da Finnhub concluída.");
+    return heatmapData;
+}
+
+function highlightTop(type) {
+  d3.selectAll("g.stock-cell-group").classed("highlight-active", false);
+  if (!leafData || leafData.length === 0) return; 
+
+  let sorted = [];
+  if (type === "gainers") {
+    sorted = leafData
+      .filter(d => d.data && typeof d.data.change === 'number' && d.data.change > 0) 
+      .sort((a, b) => b.data.change - a.data.change)
+      .slice(0, 15);
+  } else if (type === "losers") {
+    sorted = leafData
+      .filter(d => d.data && typeof d.data.change === 'number' && d.data.change < 0) 
+      .sort((a, b) => a.data.change - b.data.change) 
+      .slice(0, 15);
+  } else if (type === "active") {
+    sorted = [...leafData]
+      .sort((a, b) => b.data.value - a.data.value) 
+      .slice(0, 15);
+  } else if (type === "clear") {
+    return; 
+  }
+
+  d3.selectAll("g.stock-cell-group")
+    .filter(d_leaf => sorted.some(sorted_d => d_leaf && d_leaf.data && sorted_d.data.name === d_leaf.data.name && d_leaf.data.value === sorted_d.data.value))
+    .classed("highlight-active", true)
+    .each(function() { 
+        const parentNode = this.parentNode;
+        if (parentNode) parentNode.appendChild(this); 
+    });
+}
+
+function getColor(change) {
+    const absChange = Math.abs(change);
+
+    if (change > 0) {
+        if (absChange <= 2) return 'rgb(84, 194, 84)';
+        if (absChange <= 4) return 'rgb(0, 153, 0)';
+        return 'rgb(0, 102, 0)';
+    } else if (change < 0) {
+        if (absChange <= 2) return 'rgb(255, 82, 82)';
+        if (absChange <= 4) return 'rgb(214, 0, 0)';
+        return 'rgb(153, 0, 0)';
+    }
+    return 'rgb(224, 224, 224)';
+}
+
+function renderLegend() {
+    const svg = d3.select("#legendSvg");
+    svg.selectAll("*").remove(); 
+
+    const legendWidth = 280;
+    const legendHeight = 20;
+    const xOffset = 10;
+    const yOffset = 10;
+
+    const legendData = [
+        { label: '< -4%', value: -5 }, { label: '-4%', value: -3 },
+        { label: '-2%', value: -1 }, { label: '0%', value: 0 },
+        { label: '+2%', value: 1 }, { label: '+4%', value: 3 },
+        { label: '> +4%', value: 5 }
+    ];
+
+    const bandWidth = legendWidth / legendData.length;
+
+    svg.selectAll("rect.legend-band").data(legendData).enter().append("rect")
+        .attr("class", "legend-band")
+        .attr("x", (d, i) => xOffset + i * bandWidth).attr("y", yOffset)
+        .attr("width", bandWidth).attr("height", legendHeight)
+        .attr("fill", d => getColor(d.value))
+        .attr("stroke", "#555").attr("stroke-width", 0.5);
+
+    svg.selectAll("text.legend-label").data(legendData).enter().append("text")
+        .attr("class", "legend-label")
+        .attr("x", (d, i) => xOffset + i * bandWidth + bandWidth / 2)
+        .attr("y", yOffset + legendHeight + 15)
+        .attr("text-anchor", "middle").attr("fill", "var(--cor-texto-heatmap)")
+        .attr("font-size", "11px").text(d => d.label);
+}
+
+
+function updateHtmlBackButtonVisibility() {
+    const backButtonPlaceholder = document.getElementById('back-button-placeholder');
+    if (backButtonPlaceholder) {
+        if (currentHierarchyRoot && initialFullHierarchyRoot && currentHierarchyRoot !== initialFullHierarchyRoot) {
+            backButtonPlaceholder.style.display = 'inline-block'; 
+        } else {
+            backButtonPlaceholder.style.display = 'none';
+        }
+    }
+}
+
+function handleStockCellClick(event, d_leaf) {
+    event.stopPropagation();
+    const isGlobalView = currentHierarchyRoot === initialFullHierarchyRoot;
+
+    if (d_leaf.parent && isGlobalView) {
+        console.log(`[DEBUG] Visão Global: Navegando para o setor ${d_leaf.parent.data.name}`);
+        const sectorDataCopy = JSON.parse(JSON.stringify(d_leaf.parent.data));
+        currentHierarchyRoot = d3.hierarchy(sectorDataCopy);
+        renderTreemap(currentHierarchyRoot);
+    } else {
+        console.log(`[DEBUG] Visão de Setor: Ação ${d_leaf.data.name} clicada.`);
+        redirectToStockPage(d_leaf.data.name);
+    }
+}
+
+// Função para redirecionar para a página da ação
+function redirectToStockPage(symbol) {
+    console.log(`Redirecionando para a página da ação: ${symbol}`);
+    window.location.href = `pagina-da-acao.html?symbol=${symbol}`;
+}
+
+function appendCellVisuals(selection) {
+    selection.each(function(d_leaf_action) {
+        const node = d3.select(this);
+        const rectWidth = d_leaf_action.x1 - d_leaf_action.x0;
+        const rectHeight = d_leaf_action.y1 - d_leaf_action.y0;
+
+        if (isNaN(rectWidth) || isNaN(rectHeight) || rectWidth <= 0 || rectHeight <= 0) {
+            console.warn(`Ação ${d_leaf_action.data.name} com dimensões inválidas. Pulando.`);
+            return; 
+        }
+
+        node.append("rect")
+            .attr("width", rectWidth).attr("height", rectHeight)
+            .attr("fill", getColor(d_leaf_action.data.change));
+
+        const area = rectWidth * rectHeight;
+        if (rectWidth > 30 && rectHeight > 25 && area >= 800) {
+            const labelGroup = node.append("g").attr("class", "label-group").attr("transform", `translate(${rectWidth / 2}, ${rectHeight / 2})`);
+            const fontSizeName = Math.min(Math.max(8, Math.sqrt(area) / 8), 16);
+            const fontSizeChange = Math.min(Math.max(7, Math.sqrt(area) / 9), 14);
+            labelGroup.append("text").attr("y", -fontSizeChange * 0.5).style("font-size", `${fontSizeName}px`).text(d_leaf_action.data.name);
+            labelGroup.append("text").attr("y", fontSizeName * 0.5 + 3).style("font-size", `${fontSizeChange}px`).text(`${d_leaf_action.data.change.toFixed(2)}%`);
+        }
+    });
+}
+
+function renderTreemap(nodeToRender) {
+  const mainPageContainer = document.getElementById("container");
+  const svgDirectContainer = document.getElementById("heatmap-svg-container");
+  const heatmapSvg = d3.select("#heatmap");
+
+  heatmapSvg.selectAll("*").remove();
+
+  if (!nodeToRender || !nodeToRender.data || (!nodeToRender.children && nodeToRender.depth > 0)) {
+        console.warn("Sem dados válidos para exibir para o nó:", nodeToRender.data ? nodeToRender.data.name : "inválido");
+        updateHtmlBackButtonVisibility(); 
+        return;
+  }
+
+  hideStatusMessageShowHeatmap(); 
+  updateHtmlBackButtonVisibility(); 
+
+  requestAnimationFrame(() => {
+    const width = svgDirectContainer.clientWidth;
+    const height = svgDirectContainer.clientHeight;
+    
+    if (width <= 0 || height <= 0) {
+      console.error(`Dimensões do container (${width}x${height}) são inválidas.`);
+      showStatusMessage(`Erro: Dimensões do container inválidas (${width}x${height}).`, true);
+      return; 
+    }
+    
+    heatmapSvg.attr("viewBox", [0, 0, width, height]).attr("width", width).attr("height", height);
+
+    nodeToRender.sum(d => Math.max(d.value, 0.000001)).sort((a, b) => b.value - a.value);
+    
+    const isMainView = (nodeToRender.height > 1) || (nodeToRender === initialFullHierarchyRoot);
+    const treemapLayout = d3.treemap()
+      .size([width, height]).paddingInner(1)
+      .paddingOuter(treemapPaddingOuterValue)
+      .paddingTop(isMainView ? TITLE_PADDING_TOP : 0).round(true);
+
+    try { treemapLayout(nodeToRender); } 
+    catch (e) {
+      console.error(`Erro ao aplicar treemapLayout para ${nodeToRender.data.name}:`, e);
+      showStatusMessage(`Erro no layout do treemap para ${nodeToRender.data.name}.`, true);
+      return; 
+    }
+
+    leafData = nodeToRender.leaves();
+
+    if (isMainView) {
+      const parentGroups = heatmapSvg.selectAll("g.node-parent")
+        .data(nodeToRender.children || [], d => d.data.name)
+        .join("g")
+        .attr("class", "node-parent")
+        .attr("transform", d => `translate(${d.x0},${d.y0})`)
+        .style("cursor", "pointer")
+        .on("click", (event, d_clicked_sector) => {
+            if (d_clicked_sector.children && d_clicked_sector.children.length > 0) {
+                const sectorDataCopy = JSON.parse(JSON.stringify(d_clicked_sector.data));
+                currentHierarchyRoot = d3.hierarchy(sectorDataCopy);
+                renderTreemap(currentHierarchyRoot);
+            }
+        });
+
+      parentGroups.each(function(d_parent_sector) {
+        const group = d3.select(this);
+        const sectorFullWidth = d_parent_sector.x1 - d_parent_sector.x0;
+        const parentTotalHeight = d_parent_sector.y1 - d_parent_sector.y0;
+
+        if (parentTotalHeight >= TITLE_PADDING_TOP) {
+          group.append("rect")
+            .attr("class", "sector-title-hover-bg-fill")
+            .attr("x", 0).attr("y", 0)
+            .attr("width", sectorFullWidth).attr("height", TITLE_PADDING_TOP)
+            .style("fill", "transparent");
+        }
+        if (sectorFullWidth >= MIN_SECTOR_WIDTH_FOR_TITLE && parentTotalHeight >= TITLE_PADDING_TOP) {
+            const titleElement = group.append("text").attr("class", "sector-title")
+                .attr("x", TITLE_TEXT_HORIZONTAL_PADDING).attr("y", TITLE_PADDING_TOP / 2)
+                .text(d_parent_sector.data.name);
+            
+            const availableWidthForText = sectorFullWidth - (2 * TITLE_TEXT_HORIZONTAL_PADDING);
+            if (titleElement.node().getComputedTextLength() > availableWidthForText) {
+                titleElement.text(d_parent_sector.data.name.substring(0, Math.floor(availableWidthForText/8)) + '...');
+                if (titleElement.node().getComputedTextLength() > availableWidthForText) {
+                    titleElement.remove();
+                }
+            }
+        }
+      });
+
+      parentGroups.on("mouseenter", function(event, d_parent_sector) {
+            const parentElement = d3.select(this);
+            parentElement.select("text.sector-title").style("fill", "white");
+            parentElement.select(".sector-title-hover-bg-fill").style("fill", "var(--cor-destaque-heatmap)");
+            parentElement.append("rect").attr("class", "overall-hover-border")
+                .attr("x", 0).attr("y", 0)
+                .attr("width", d_parent_sector.x1 - d_parent_sector.x0)
+                .attr("height", d_parent_sector.y1 - d_parent_sector.y0)
+                .style("fill", "none").style("stroke", "var(--cor-destaque-heatmap)")
+                .style("stroke-width", 2).style("pointer-events", "none");
+        }).on("mouseleave", function() {
+            const parentElement = d3.select(this);
+            parentElement.selectAll(".overall-hover-border").remove();
+            parentElement.select("text.sector-title").style("fill", "var(--cor-texto-heatmap)");
+            parentElement.select(".sector-title-hover-bg-fill").style("fill", "transparent");
+        });
+    
+      parentGroups.selectAll("g.stock-cell-group")
+        .data(d => d.children || [], d => d.data.name)
+        .join("g")
+        .attr("class", "stock-cell-group node")
+        .attr("transform", d => `translate(${d.x0 - d.parent.x0},${d.y0 - d.parent.y0})`)
+        .on("click", handleStockCellClick) 
+        .on("mouseover", handleMouseOver).on("mousemove", handleMouseMove).on("mouseout", handleMouseOut)
+        .call(appendCellVisuals);
+
+    } else {
+      heatmapSvg.selectAll("g.stock-cell-group")
+        .data(nodeToRender.children || [], d => d.data.name)
+        .join("g")
+        .attr("class", "stock-cell-group node")
+        .attr("transform", d => `translate(${d.x0},${d.y0})`)
+        .on("click", handleStockCellClick)
+        .on("mouseover", handleMouseOver).on("mousemove", handleMouseMove).on("mouseout", handleMouseOut)
+        .call(appendCellVisuals);
+    } 
+  }); 
+}
+
+async function initializeHeatmap() {
+    const spinner = document.getElementById('loading-spinner');
+    const heatmapContainer = document.getElementById('heatmap-svg-container');
+    const statusDiv = document.getElementById('statusMessage');
+
+    spinner.style.display = 'block';
+    heatmapContainer.style.display = 'none';
+    statusDiv.style.display = 'none'; 
+
+    htmlBackButtonElement = document.getElementById('html-back-button');
+    if (htmlBackButtonElement) {
+        htmlBackButtonElement.onclick = () => {
+            if (initialFullHierarchyRoot) {
+                currentHierarchyRoot = initialFullHierarchyRoot;
+                renderTreemap(currentHierarchyRoot);
+            }
+        };
+    }
+
+    initialRawData = await fetchStockDataFinnhub();
+    spinner.style.display = 'none'; 
+
+    if (initialRawData && initialRawData.children && initialRawData.children.length > 0) {
+        initialFullHierarchyRoot = d3.hierarchy(initialRawData); 
+        currentHierarchyRoot = initialFullHierarchyRoot; 
+        heatmapContainer.style.display = 'flex'; 
+        statusDiv.style.display = 'none'; 
+        renderTreemap(currentHierarchyRoot);
+        renderLegend(); 
+    } else {
+        heatmapContainer.style.display = 'none'; 
+        let finalErrorMessage = "Falha ao carregar dados para o heatmap.";
+        if (!initialRawData) { 
+            finalErrorMessage = "Nenhum dado de ação foi carregado. Verifique as chaves da API e a conexão.";
+        }
+        showStatusMessage(finalErrorMessage, false);
+    }
+    updateHtmlBackButtonVisibility(); 
+}
+
+initializeHeatmap();
+window.addEventListener("resize", () => {
+    if (document.getElementById('loading-spinner').style.display === 'none' && currentHierarchyRoot) { 
+        renderLegend();
+        renderTreemap(currentHierarchyRoot);
+    }
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mercado de Ações - Top Ganhadores</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            margin: 0;
+            padding: 20px;
+        }
+        .stocks-container {
+            background-color: #252526;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        h2 {
+            color: #e0e0e0;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap; 
+        }
+        .tab-button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: none;
+            background-color: transparent;
+            color: #a0a0a0;
+            font-size: 14px;
+            border-bottom: 3px solid transparent;
+            margin-right: 5px;
+            margin-bottom: 5px; 
+        }
+        .tab-button.active {
+            color: #0095ff;
+            border-bottom-color: #0095ff;
+            font-weight: bold;
+        }
+        .view-options {
+            margin-bottom: 15px;
+        }
+        .view-button {
+            padding: 7px 12px;
+            margin-right: 8px;
+            cursor: pointer;
+            border: 1px solid #3c3c3c;
+            background-color: #2d2d2d;
+            color: #d4d4d4;
+            font-size: 13px;
+            border-radius: 4px;
+        }
+        .view-button.active {
+            background-color: #3a3d40;
+            color: #ffffff;
+            border-color: #4a4d50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 10px 8px;
+            text-align: left;
+            border-bottom: 1px solid #2c2c2c;
+            white-space: nowrap; 
+        }
+        th {
+            color: #8e8e8e;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        tbody tr:hover {
+            background-color: #2a2d2e;
+        }
+        .text-red { color: #f44336; }
+        .text-green { color: #4caf50; }
+        .symbol {
+            color: #5dade2;
+            font-weight: bold;
+        }
+        td.number-cell, th.number-header {
+            text-align: right;
+            padding-right: 15px;
+        }
+        .message-cell {
+            text-align: center;
+            padding: 20px;
+            color: #a0a0a0;
+        }
+        .error-message { color: #f44336; }
+    </style>
+</head>
+<body>
+
+<div class="stocks-container">
+    <h2>Ações</h2>
+    <div class="tabs">
+        <button class="tab-button" data-tab-id="most-active">Mais Ativas</button>
+        <button class="tab-button" data-tab-id="trending-now">Tendências</button>
+        <button class="tab-button active" data-tab-id="top-gainers">Top Ganhadores</button>
+        <button class="tab-button" data-tab-id="top-losers">Top Perdedores</button>
+        <button class="tab-button" data-tab-id="52wk-gainers">Maiores Altas (52 Semanas)</button>
+        <button class="tab-button" data-tab-id="52wk-losers">Maiores Baixas (52 Semanas)</button>
+    </div>
+    <div class="view-options">
+        <button class="view-button active" data-view-id="table">Visão Tabela</button>
+        <button class="view-button" data-view-id="heatmap">Heatmap</button>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Símbolo</th>
+                <th>Nome</th>
+                <th class="number-header">Preço</th>
+                <th class="number-header">Variação</th>
+                <th class="number-header">Variação %</th>
+                <th class="number-header">Volume</th>
+                <th class="number-header">Vol Médio (3M)</th>
+                <th class="number-header">Capitalização</th>
+                <th class="number-header">P/L (TTM)</th>
+                <th class="number-header">Variação % (52 Sem)</th>
+            </tr>
+        </thead>
+        <tbody id="stock-table-body">
+            </tbody>
+    </table>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const stockTableBody = document.getElementById('stock-table-body');
+    // ↓↓↓ COLOQUE SUA CHAVE DA API FMP (FINANCIAL MODELING PREP) AQUI ↓↓↓
+    const FMP_API_KEY = 'LtdVw6hZ39ugp0qoE2ZajRsPs549PRPO';
+    const AUTO_UPDATE_INTERVAL_MS = 10000; // 3 minutos
+    let autoUpdateIntervalId = null;
+
+    function displayMessage(message, type = 'info') {
+        const cssClass = type === 'error' ? 'error-message' : 'message-cell';
+        stockTableBody.innerHTML = `<tr><td colspan="10" class="${cssClass}">${message}</td></tr>`;
+    }
+
+    function displayStocks(stocks) {
+        stockTableBody.innerHTML = '';
+        if (!Array.isArray(stocks) || stocks.length === 0) {
+            displayMessage("Nenhuma ação encontrada para os critérios selecionados.");
+            return;
+        }
+
+        stocks.forEach(stock => {
+            const row = stockTableBody.insertRow();
+            const change = parseFloat(stock.change);
+            const percentChange = parseFloat(stock.changesPercentage);
+            const sign = change > 0 ? '+' : '';
+            const colorClass = change < 0 ? 'text-red' : 'text-green';
+
+            // Colunas não fornecidas por este endpoint específico da FMP
+            const volume = "N/D";
+            const avgVol = "N/D";
+            const marketCap = "N/D";
+            const peRatio = "N/D";
+            const wk52ChangePercent = "N/D";
+
+            row.innerHTML = `
+                <td><span class="symbol">${stock.symbol || 'N/D'}</span></td>
+                <td>${stock.name || 'N/D'}</td>
+                <td class="number-cell">${stock.price?.toFixed(2) || 'N/D'}</td>
+                <td class="${colorClass} number-cell">${sign}${change?.toFixed(2) || 'N/D'}</td>
+                <td class="${colorClass} number-cell">${sign}${percentChange?.toFixed(2) || 'N/D'}%</td>
+                <td class="number-cell">${volume}</td>
+                <td class="number-cell">${avgVol}</td>
+                <td class="number-cell">${marketCap}</td>
+                <td class="number-cell">${peRatio}</td>
+                <td class="number-cell">${wk52ChangePercent}</td>
+            `;
+        });
+    }
+
+    async function fetchMarketData(tabId) {
+        if (FMP_API_KEY === 'SUA_CHAVE_FMP_AQUI' || !FMP_API_KEY) {
+            displayMessage("ERRO: Por favor, configure sua chave da API FMP no código.", 'error');
+            return;
+        }
+
+        displayMessage("Carregando dados...");
+        
+        let endpointType = '';
+        if (tabId === 'top-losers') {
+            endpointType = 'losers';
+        } else if (tabId === 'top-gainers') {
+            endpointType = 'gainers';
+        } else if (tabId === 'most-active') {
+            endpointType = 'actives';
+        } else {
+            displayMessage(`A aba "${tabId}" não é suportada por este exemplo.`);
+            return; 
+        }
+
+        const apiUrl = `https://financialmodelingprep.com/api/v3/stock_market/${endpointType}?apikey=${FMP_API_KEY}`;
+        
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) {
+                throw new Error(`Erro de rede: ${response.status}`);
+            }
+            const data = await response.json();
+
+            if (data && typeof data === 'object' && data["Error Message"]) {
+                throw new Error(`Erro da API: ${data["Error Message"]}`);
+            }
+            
+            displayStocks(Array.isArray(data) ? data : []);
+
+        } catch (error) {
+            displayMessage(error.message, 'error');
+        }
+    }
+
+    function fetchCurrentlyActiveTabData() {
+        const activeTabButton = document.querySelector('.tab-button.active');
+        if (activeTabButton) {
+            fetchMarketData(activeTabButton.dataset.tabId);
+        }
+    }
+
+    function startAutoUpdate() {
+        if (autoUpdateIntervalId) {
+            clearInterval(autoUpdateIntervalId);
+        }
+        fetchCurrentlyActiveTabData(); 
+        autoUpdateIntervalId = setInterval(fetchCurrentlyActiveTabData, AUTO_UPDATE_INTERVAL_MS);
+    }
+
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', (event) => {
+            document.querySelector('.tab-button.active')?.classList.remove('active');
+            event.currentTarget.classList.add('active');
+            startAutoUpdate();
+        });
+    });
+
+    const viewModeButtons = document.querySelectorAll('.view-button');
+    viewModeButtons.forEach(button => {
+        button.addEventListener('click', (event) => {
+            document.querySelector('.view-button.active')?.classList.remove('active');
+            event.currentTarget.classList.add('active');
+        });
+    });
+
+    const initialActiveTab = document.querySelector('.tab-button.active');
+    if (initialActiveTab) {
+        startAutoUpdate();
+    }
+});
+</script>
+
+</body>
+</html>
