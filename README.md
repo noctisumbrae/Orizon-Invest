@@ -1,1 +1,1 @@
-Prototipo para um site de analise ações focado no mercado da NASDAQ, com funcionalidades de API em tempo real para noticias da ação selecionada, assim como um Tree Map do mercado no dia e grafico de candles com porcentagens de queda ou aumento da ação. 
+Prototipo para um site de analise ações focado no mercado da NASDAQ, com funcionalidades de API em tempo real para noticias da ação selecionada, assim como um Tree Map do mercado no dia e grafico de candles com porcentagens de queda ou aumento da ação.

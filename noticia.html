@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notícias do Mercado</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .tabs-container {
+            max-width: 800px; 
+            margin: 0 auto; /* Centralizar, sem margem inferior específica aqui */
+            /* padding-left: 10px; -- REMOVIDO para alinhar à esquerda */
+            position: relative;
+            z-index: 10;
+        }
+
+        .tab-button {
+            padding: 12px 18px;
+            margin-right: 2px; /* Espaço entre abas */
+            /* margin-left: 0; -- Garante que a primeira aba comece na borda */
+            cursor: pointer;
+            border: 1px solid #ddd;
+            background-color: #e9ecef;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            border-bottom: none; 
+            position: relative;
+            bottom: -1px; 
+            font-weight: 500;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .tab-button:hover {
+            background-color: #dee2e6;
+        }
+
+        .tab-button.active {
+            background-color: #fff; 
+            border-color: #ddd;
+            border-bottom: 1px solid #fff; 
+            z-index: 1;
+        }
+
+        .news-container {
+            max-width: 800px;
+            margin: 0 auto 20px auto; 
+            background-color: #fff;
+            padding: 20px;
+            padding-top: 30px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-top: 0; 
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        #news-list {
+            list-style-type: none;
+            padding: 0;
+            height: 1600px; /* ALTURA FIXA - ajuste este valor conforme necessário */
+            overflow-y: auto; /* Adiciona barra de rolagem se o conteúdo exceder a altura */
+            display: flex;
+            flex-direction: column;
+            border-top: 1px solid #eee; /* Linha sutil no topo da área de scroll */
+            border-bottom: 1px solid #eee; /* Linha sutil na base da área de scroll */
+        }
+
+        #news-list li.message-item {
+            text-align: center;
+            font-style: italic;
+            color: #555;
+            padding: 20px;
+            margin: auto; 
+            font-size: 1.1em;
+            width: 100%; /* Para ocupar a largura e centralizar o texto */
+        }
+        
+        #news-list li.message-item.error {
+            color: #d9534f; 
+            font-weight: bold;
+        }
+
+        #news-list li.message-item.loading {
+            color: #007bff; 
+        }
+
+        #news-list li:not(.message-item) { 
+            background-color: #f9f9f9;
+            border: 1px solid #eee; /* Borda sutil para cada item, pode remover se preferir */
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+        }
+         /* Adiciona margem apenas se não for o último item de notícia real */
+        #news-list li:not(.message-item):not(:last-child) {
+            margin-bottom: 10px;
+        }
+        #news-list li:not(.message-item):last-child {
+            margin-bottom: 0; /* Remove margem do último item para melhor encaixe no scroll */
+        }
+
+
+        #news-list li:not(.message-item) img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 4px;
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .news-text-content { 
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #news-list li:not(.message-item) h3 {
+            margin-top: 0;
+            margin-bottom: 5px;
+            font-size: 1.2em;
+        }
+
+        #news-list li:not(.message-item) p {
+            margin: 5px 0;
+            font-size: 0.9em;
+            color: #555;
+        }
+
+        #news-list li:not(.message-item) a {
+            text-decoration: none;
+            color: #007bff;
+            font-weight: bold;
+            margin-top: auto; 
+        }
+
+        #news-list li:not(.message-item) a:hover {
+            text-decoration: underline;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="tabs-container">
+        <button class="tab-button active" data-category="general">Geral</button>
+        <button class="tab-button" data-category="crypto">Crypto</button>
+        <button class="tab-button" data-category="forex">Forex</button>
+        <button class="tab-button" data-category="merger">Fusões e Aquisições</button>
+    </div>
+
+    <div class="news-container">
+        <h1>Últimas Notícias</h1>
+        <ul id="news-list">
+            </ul>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const apiKey = 'd1095o1r01qhkqr8lp80d1095o1r01qhkqr8lp8g';
+            let currentNewsCategory = 'general';
+            const updateIntervalMinutes = 10;
+            const numberOfArticles = 10; // Ou mais, se a área de scroll permitir
+
+            const newsList = document.getElementById('news-list');
+            const tabButtons = document.querySelectorAll('.tab-button');
+
+            function formatUnixTimestamp(timestamp) {
+                const date = new Date(timestamp * 1000);
+                return date.toLocaleString('pt-BR');
+            }
+
+            async function fetchNews() {
+                if (!apiKey || apiKey === 'SUA_CHAVE_API_AQUI') {
+                    newsList.innerHTML = '<li class="message-item error">CONFIGURAÇÃO: Por favor, insira sua chave de API da Finnhub.</li>';
+                    console.error('Chave da API não configurada.');
+                    return;
+                }
+
+                newsList.innerHTML = '<li class="message-item loading">Carregando notícias...</li>';
+
+                const url = `https://finnhub.io/api/v1/news?category=${currentNewsCategory}&token=${apiKey}`;
+                let customErrorMessage = '';
+
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            customErrorMessage = 'Erro de Autenticação: Verifique sua chave de API.';
+                        } else if (response.status === 403) {
+                            customErrorMessage = 'Acesso Negado: Sua chave de API não tem permissão para este recurso.';
+                        } else if (response.status === 429) {
+                            customErrorMessage = 'Limite de Requisições Atingido. Tente novamente mais tarde.';
+                        } else {
+                            customErrorMessage = `Erro ao buscar notícias (HTTP ${response.status}).`;
+                        }
+                        throw new Error(customErrorMessage);
+                    }
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        displayNews(data);
+                    } else if (data && data.length === 0) {
+                         newsList.innerHTML = '<li class="message-item">Nenhuma notícia encontrada para esta categoria.</li>';
+                    } else { 
+                        newsList.innerHTML = '<li class="message-item error">Não foi possível carregar as notícias. Formato de resposta inesperado.</li>';
+                    }
+                } catch (error) {
+                    console.error('Falha ao buscar notícias:', error);
+                    newsList.innerHTML = `<li class="message-item error">${customErrorMessage || error.message || 'Ocorreu um erro desconhecido.'}</li>`;
+                }
+            }
+
+            function displayNews(articles) {
+                newsList.innerHTML = ''; 
+
+                const articlesToDisplay = articles.slice(0, numberOfArticles);
+
+                articlesToDisplay.forEach(article => {
+                    const listItem = document.createElement('li');
+
+                    if (article.image && article.image.trim() !== '') {
+                        const img = document.createElement('img');
+                        img.src = article.image;
+                        img.alt = article.headline;
+                        listItem.appendChild(img);
+                    }
+
+                    const textContentDiv = document.createElement('div');
+                    textContentDiv.className = 'news-text-content';
+
+                    const title = document.createElement('h3');
+                    title.textContent = article.headline;
+                    textContentDiv.appendChild(title);
+
+                    const source = document.createElement('p');
+                    source.textContent = `Fonte: ${article.source}`;
+                    textContentDiv.appendChild(source);
+
+                    const datetime = document.createElement('p');
+                    datetime.textContent = `Data: ${formatUnixTimestamp(article.datetime)}`;
+                    textContentDiv.appendChild(datetime);
+
+                    const link = document.createElement('a');
+                    link.href = article.url;
+                    link.textContent = 'Leia mais';
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    textContentDiv.appendChild(link);
+                    
+                    listItem.appendChild(textContentDiv);
+                    newsList.appendChild(listItem);
+                });
+            }
+
+            tabButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    currentNewsCategory = button.dataset.category;
+                    fetchNews();
+                });
+            });
+
+            fetchNews();
+            setInterval(fetchNews, updateIntervalMinutes * 60 * 1000);
+        });
+    </script>
+</body>
+</html>

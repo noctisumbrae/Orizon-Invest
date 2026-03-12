@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gráfico de Ações em Tempo Real (Alpha Vantage)</title>
+    
+    <script src="https://code.highcharts.com/stock/highstock.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/data.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/indicators.js"></script>
+    <script src="https://code.highcharts.com/stock/stock/modules/drag-panes.js"></script>
+    <script src="https://code.highcharts.com/stock/modules/annotations.js"></script>
+    
+    <style>
+        #chart-container {
+            width: 90%;
+            max-width: 1200px;
+            height: 600px;
+            margin: 50px auto;
+            border: 1px solid #ddd;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+        }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+        }
+        #loading-message {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #555;
+        }
+        #status-message {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gráfico de Ações (AAPL - Atualização a Cada 60s)</h1>
+    
+    <div id="chart-container">
+        <p id="loading-message">Carregando dados iniciais do gráfico...</p>
+        <p id="status-message"></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const loadingMessage = document.getElementById('loading-message');
+            const statusMessage = document.getElementById('status-message');
+            
+            // Sua chave API da Alpha Vantage
+            const ALPHA_VANTAGE_API_KEY = 'ZFQDNZ946X36TIYZ'; 
+            const SYMBOL = 'AAPL'; 
+            const UPDATE_INTERVAL_MS = 60 * 1000; // Atualiza a cada 60 segundos (1 minuto)
+
+            let chart; // Variável para armazenar a instância do gráfico
+
+            async function fetchDataAndUpdateChart() {
+                try {
+                    statusMessage.textContent = 'Buscando novos dados...';
+                    const alphaVantageUrl = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${SYMBOL}&interval=1min&outputsize=compact&apikey=${ALPHA_VANTAGE_API_KEY}`;
+                    
+                    console.log("Tentando buscar dados da URL:", alphaVantageUrl);
+                    
+                    const response = await fetch(alphaVantageUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    console.log("Dados brutos da Alpha Vantage:", data);
+
+                    const timeSeries = data['Time Series (1min)'];
+
+                    if (!timeSeries) {
+                        if (data['Error Message']) {
+                            throw new Error(`Erro da API Alpha Vantage: ${data['Error Message']}`);
+                        }
+                        if (data['Note']) {
+                            throw new Error(`Erro da API Alpha Vantage: ${data['Note']}. Você atingiu o limite de requisições do plano gratuito (5 por minuto / 25 por dia).`);
+                        }
+                        throw new Error("Nenhum dado intradiário encontrado. Verifique o símbolo da ação ou sua chave API.");
+                    }
+
+                    const ohlcData = [];
+                    const volumeData = [];
+
+                    const dates = Object.keys(timeSeries).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+                    for (const dateStr of dates) {
+                        const item = timeSeries[dateStr];
+                        const timestampMs = new Date(dateStr).getTime();
+                        
+                        const open = parseFloat(item['1. open']);
+                        const high = parseFloat(item['2. high']);
+                        const low = parseFloat(item['3. low']);
+                        const close = parseFloat(item['4. close']);
+                        const volume = parseFloat(item['5. volume']); 
+                        
+                        ohlcData.push([timestampMs, open, high, low, close]);
+                        volumeData.push([timestampMs, volume]);
+                    }
+
+                    if (chart) {
+                        chart.series[0].setData(ohlcData);
+                        chart.series[1].setData(volumeData);
+                        statusMessage.textContent = `Gráfico atualizado em: ${new Date().toLocaleTimeString()}`;
+                    } else {
+                        loadingMessage.style.display = 'none';
+                        renderHighcharts(ohlcData, volumeData, SYMBOL);
+                        statusMessage.textContent = `Gráfico inicial carregado. Última atualização: ${new Date().toLocaleTimeString()}`;
+                    }
+
+                } catch (error) {
+                    console.error("Erro ao buscar ou processar dados da Alpha Vantage:", error);
+                    loadingMessage.style.display = 'none';
+                    statusMessage.textContent = `Erro ao carregar/atualizar os dados: ${error.message}.`;
+                    statusMessage.style.color = 'red';
+                }
+            }
+
+            function renderHighcharts(ohlcData, volumeData, symbol) {
+                chart = Highcharts.stockChart('chart-container', {
+                    rangeSelector: {
+                        enabled: false
+                    },
+                    navigator: {
+                        enabled: false
+                    },
+                    scrollbar: {
+                        enabled: false
+                    },
+
+                    title: {
+                        text: `${symbol} Preço da Ação (Dados Intradiários)`
+                    },
+
+                    subtitle: {
+                        text: 'Dados de Alpha Vantage (Plano Gratuito - Limite de Requisições)'
+                    },
+
+                    xAxis: {
+                        type: 'datetime',
+                        labels: {
+                            formatter: function() {
+                                return Highcharts.dateFormat('%H:%M:%S', this.value);
+                            }
+                        }
+                    },
+
+                    yAxis: [{
+                        labels: {
+                            align: 'right',
+                            x: -3
+                        },
+                        title: {
+                            text: 'Preço'
+                        },
+                        height: '60%',
+                        lineWidth: 2,
+                        resize: {
+                            enabled: true
+                        }
+                    }, {
+                        labels: {
+                            align: 'right',
+                            x: -3
+                        },
+                        title: {
+                            text: 'Volume'
+                        },
+                        top: '65%',
+                        height: '35%',
+                        offset: 0,
+                        lineWidth: 2
+                    }],
+
+                    tooltip: {
+                        split: true
+                    },
+
+                    series: [{
+                        type: 'candlestick',
+                        name: `${symbol} Preço`,
+                        data: ohlcData,
+                        // === ADIÇÃO PARA AS CORES DOS CANDLES ===
+                        color: 'red',    // Cor para velas de baixa (fechamento < abertura)
+                        upColor: 'green',// Cor para velas de alta (fechamento > abertura)
+                        // ======================================
+                        dataGrouping: {
+                            enabled: false
+                        },
+                        id: 'main-series'
+                    }, {
+                        type: 'column',
+                        name: 'Volume',
+                        data: volumeData,
+                        yAxis: 1,
+                        dataGrouping: {
+                            enabled: false
+                        }
+                    }]
+                });
+            }
+
+            fetchDataAndUpdateChart();
+            setInterval(fetchDataAndUpdateChart, UPDATE_INTERVAL_MS);
+        });
+    </script>
+</body>
+</html>
